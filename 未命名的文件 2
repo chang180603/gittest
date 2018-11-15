@@ -1,0 +1,15 @@
+送餐箱topic define
+
+  topic名稱     輸入型別
+ /coverCmd      String 
+   String 輸入格式為 -> [cmd][id]     
+    cmd -> 輸入  open  或  close 或 query
+    id -> 輸入  0~5 其中一個  （0～5為門的編號）
+ 
+/coverStatus    String
+    String 回傳格式為 -> [status][id] 
+    status為 openned 或 closed 看當下狀態決定 
+    id為 0～5  （此時的id由coverCmd [query][id]輸入的id決定）
+    
+    輸入內容或格式錯誤時  回傳 [error][id][errorCode]
+

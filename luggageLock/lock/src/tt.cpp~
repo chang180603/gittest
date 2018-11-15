@@ -1,0 +1,154 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <errno.h>
+#include <string.h>
+#include <unistd.h>
+#include <time.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+#include <net/if.h>
+#include <net/if_arp.h>
+#include <sys/ioctl.h>
+
+
+#define LOCAL_PORT 8888
+#define REMOTE_PORT 9999
+#define BUFFER_SIZE 1024
+#define UDP_GO_TEST_FLAG "TESTER_START_TEST\r\n"
+
+
+int get_local_ip(char *ip, int len)
+{
+    if((ip == NULL) || (len < 16))
+    {
+        printf("####L(%d) fail....\n", __LINE__);
+        return -1;
+    }
+    memset(ip, 0x0, len); //清空
+    int sock_get_ip;
+
+
+    struct   sockaddr_in *sin;
+    struct   ifreq ifr_ip;
+
+
+    if ((sock_get_ip = socket(AF_INET, SOCK_STREAM, 0)) == -1)
+    {
+        printf("####L(%d) socket create fail...get_local_ip!\n", __LINE__);
+        return -1;
+    }
+
+
+    memset(&ifr_ip, 0, sizeof(ifr_ip));
+    //获取网口的IP
+    strncpy(ifr_ip.ifr_name, "ens33", sizeof(ifr_ip.ifr_name) - 1);
+
+
+    if( ioctl( sock_get_ip, SIOCGIFADDR, &ifr_ip) < 0 )
+    {
+        printf("####L(%d) fail......\n", __LINE__);
+        close(sock_get_ip);
+        return -1;
+    }
+    sin = (struct sockaddr_in *)&ifr_ip.ifr_addr;
+    strcpy(ip, inet_ntoa(sin->sin_addr));
+
+
+    printf("####L(%d) local ip:%s \n", __LINE__, ip);
+    close( sock_get_ip);
+
+
+    return 0;
+}
+
+
+int main(int argc, char **argv)
+{
+    char send_msg[BUFFER_SIZE] = {0};
+    char recv_msg[BUFFER_SIZE] = {0};
+    int brdcFd;
+    char localIp[16] = {0};
+    time_t current_time;
+    struct tm *now;
+
+
+    if((brdcFd = socket(PF_INET, SOCK_DGRAM, 0)) == -1)//建立套接字
+    {
+        printf("####L(%d) socket fail!\n", __LINE__);
+        exit(-1);
+    }
+
+
+    struct sockaddr_in local;
+    memset(&local, 0, sizeof(struct sockaddr_in));
+    local.sin_family = AF_INET;
+    local.sin_addr.s_addr = INADDR_ANY;
+    local.sin_port = htons(LOCAL_PORT);//UDP 广播包 本地端口
+    socklen_t local_len = sizeof(struct sockaddr);
+
+
+    if(bind(brdcFd, (struct sockaddr *)&local, sizeof(local)))//绑定端口
+    {
+        printf("####L(%d) client bind port failed!\n", __LINE__);
+        close(brdcFd);//关闭socket
+        exit(-1);
+    }
+
+
+    int optval = 1;
+    setsockopt(brdcFd, SOL_SOCKET, SO_BROADCAST | SO_REUSEADDR, &optval, sizeof(int));
+
+
+    struct sockaddr_in remoteAddr;
+    memset(&remoteAddr, 0, sizeof(struct sockaddr_in));
+    remoteAddr.sin_family = AF_INET;
+    remoteAddr.sin_addr.s_addr = htonl(INADDR_BROADCAST);
+    remoteAddr.sin_port = htons(REMOTE_PORT);//UDP 广播包 远端端口
+    int send_bytes, recv_bytes;
+
+
+    socklen_t addr_len = sizeof(struct sockaddr);
+
+
+    get_local_ip(localIp, 16);
+
+
+    while(1)
+    {
+        memset(send_msg, 0x0, BUFFER_SIZE);
+        sprintf(send_msg, "%s\r", localIp);//要发送出去的广播信息
+#if 1
+        memset(recv_msg, 0x0, sizeof(recv_msg));
+        recv_bytes = recvfrom(brdcFd, recv_msg, sizeof(recv_msg), MSG_DONTWAIT, (struct sockaddr *)&local, &local_len);
+        if(recv_bytes > 0)//收到内容
+        {
+            time(&current_time);
+            now = localtime(&current_time);
+
+
+            printf("####L(%d) [%4d-%02d-%02d %02d:%02d:%02d]UDP recv data:%s\n", __LINE__, now->tm_year + 1900, now->tm_mon + 1, now->tm_mday, now->tm_hour, now->tm_min, now->tm_sec, recv_msg);
+
+
+            if((0 == strncasecmp(recv_msg, UDP_GO_TEST_FLAG, strlen(UDP_GO_TEST_FLAG))))
+            {
+
+
+                if((send_bytes = sendto(brdcFd, send_msg, strlen(send_msg), 0,
+                                        (struct sockaddr *)&remoteAddr, addr_len)) == -1)
+                {
+                    printf("####L(%d) sendto fail, errno=%d \n", __LINE__, errno);
+                    break;
+                }
+
+
+                printf("####L(%d) [%4d-%02d-%02d %02d:%02d:%02d]alive send:ip[%s]\n", __LINE__, now->tm_year + 1900, now->tm_mon + 1, now->tm_mday, now->tm_hour, now->tm_min, now->tm_sec, localIp);
+            }
+        }
+#endif
+        usleep(500 * 1000);
+    }
+    close(brdcFd);
+
+
+    return 0;
+}

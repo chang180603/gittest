@@ -1,0 +1,8 @@
+topic define:
+luggageLock   -->UNIT8
+      value : 0~ n-1   (鎖的編號, 如果是兩邊鎖, 就是 左0, 右1)  
+
+luggageLockStatus  -->UINT8MultiArray
+      value[ ]       0:unlocked    1:locked    (index 是鎖的編號)   
+
+

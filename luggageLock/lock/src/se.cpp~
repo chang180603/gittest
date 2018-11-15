@@ -1,0 +1,120 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <errno.h>
+#include <string.h>
+#include <unistd.h>
+#include <time.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
+
+
+#define LOCAL_PORT  8888
+#define REMOTE_PORT 8888
+#define BUFFER_SIZE 1024
+#define UDP_GO_TEST_FLAG "TESTER_START_TEST\r\n"
+
+
+int main(int argc, char **argv)
+{
+    char send_msg[BUFFER_SIZE] = {0};
+    char recv_msg[BUFFER_SIZE] = {0};//要接收的信息
+    int brdcFd;
+    struct tm *now;
+    time_t current_time = time((time_t *)NULL);
+    int send_msg_flag = 0;
+    int interval_sec = 30; //(send pre 30 sec)
+
+
+    if((brdcFd = socket(PF_INET, SOCK_DGRAM, 0)) == -1)//建立套接字
+    {
+        printf("####L(%d) socket fail!\n", __LINE__);
+        exit(-1);
+    }
+
+
+    struct sockaddr_in local;
+    memset(&local, 0, sizeof(struct sockaddr_in));
+    local.sin_family = AF_INET;
+    local.sin_addr.s_addr = INADDR_ANY;
+    local.sin_port = htons(LOCAL_PORT);//UDP 广播包 本地端口
+    socklen_t local_len = sizeof(struct sockaddr);
+
+
+    if(bind(brdcFd, (struct sockaddr *)&local, sizeof(local)))//绑定端口
+    {
+        printf("####L(%d) client bind port failed!\n", __LINE__);
+        close(brdcFd);//关闭socket
+        exit(-1);
+    }
+
+
+    int optval = 1;
+    setsockopt(brdcFd, SOL_SOCKET, SO_BROADCAST | SO_REUSEADDR, &optval, sizeof(int));
+
+
+    struct sockaddr_in remoteAddr;
+    memset(&remoteAddr, 0, sizeof(struct sockaddr_in));
+    remoteAddr.sin_family = AF_INET;
+    remoteAddr.sin_addr.s_addr = htonl(INADDR_BROADCAST);
+    remoteAddr.sin_port = htons(REMOTE_PORT);//UDP 广播包 远端端口
+    int send_bytes, recv_bytes;
+
+
+    socklen_t addr_len = sizeof(struct sockaddr);
+
+
+    while(1)
+    {
+        if ((abs(time((time_t *)NULL) - current_time) >= interval_sec))
+        {
+            printf("####L(%d) going to send...\n", __LINE__);
+            current_time = time((time_t *)NULL);
+            if(!send_msg_flag)
+                send_msg_flag = 1;
+        }
+        else
+        {
+            if(send_msg_flag)
+                send_msg_flag = 0;
+        }
+
+
+        if(send_msg_flag)
+        {
+            memset(recv_msg, 0x0, sizeof(recv_msg));
+            memset(send_msg, 0x0, BUFFER_SIZE);
+            sprintf(send_msg, "%s", UDP_GO_TEST_FLAG);//要发送出去的广播信息
+
+
+            send_bytes = sendto(brdcFd, send_msg, strlen(send_msg), 0, (struct sockaddr *)&remoteAddr, addr_len);
+            if(send_bytes > 0) //发送完成
+            {
+#if 1
+                recv_bytes = recvfrom(brdcFd, recv_msg, sizeof(recv_msg), MSG_DONTWAIT, (struct sockaddr *)&local, &local_len);
+                if(recv_bytes > 0)//收到内容
+                {
+                    time(&current_time);
+                    now = localtime(&current_time);
+
+
+                    printf("####L(%d) [%4d-%02d-%02d %02d:%02d:%02d]UDP recv data:%s\n", __LINE__, now->tm_year + 1900, now->tm_mon + 1, now->tm_mday, now->tm_hour, now->tm_min, now->tm_sec, recv_msg);
+                }
+#endif
+            }
+            else
+            {
+                printf("####L(%d) sendto fail, errno=%d \n", __LINE__, errno);
+                break;
+            }
+        }
+
+
+        usleep(500 * 1000);
+    }
+
+
+    close(brdcFd);
+
+
+    return 0;
+}
