@@ -1,0 +1,10 @@
+<launch>
+	<node pkg="box" type="door_cmd_Subscriber.py" name="Peripherial_cmd" output="screen">
+	</node>
+
+<node pkg="box" type="door_html.py" name="Peripherial_html" output="screen">
+	</node>
+
+	<node pkg="box" type="door_Status.py" name="Peripherial_status" output="screen">
+	</node>
+</launch>
