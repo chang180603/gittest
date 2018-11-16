@@ -9,8 +9,8 @@ void door_open(int i)
      Serial.println("op");
      }
      light_blocking(i);
-     int ggg=0;
-   if (Light_Block==true && light_blocking_door_num==i && ggg==1)
+ 
+   if (Light_Block==true && light_blocking_door_num==i )
    {
      motor_stop(i);
      Block_Buffer=true;
